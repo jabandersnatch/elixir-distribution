@@ -53,7 +53,8 @@ defmodule DistributionNerves.MixProject do
 
       # Dependencies for all targets except :host
       {:nerves_pack, "~> 0.7.0", targets: @all_targets},
-
+      {:nx, "~> 0.7.2"},
+      {:math, "~> 0.7.0"},
       # Dependencies for specific targets
       # NOTE: It's generally low risk and recommended to follow minor version
       # bumps to Nerves systems. Since these include Linux kernel and Erlang

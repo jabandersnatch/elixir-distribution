@@ -1,13 +1,11 @@
 c "read-file.exs"
 c "task1.exs"
-c "benchmark.exs"
 c "JUAN-JOSE-CORDOBA-TASK3.exs"
 c "distribute.exs"
 pid = spawn(fn -> Distribute.actor(&Task3.count/1, &Task1.union_fun/2, &Task1.partition_fun/2, %{}, :some) end)
 Process.register pid, :some
 
 text = ReadFile.read_file()
-Node.connect :"foor@Juans-MacBook-Pro-5"
 Node.connect :"baz@Juans-MacBook-Pro-5"
 Node.connect :"foo@Juans-MacBook-Pro-5"
 
