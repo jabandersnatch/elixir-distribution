@@ -1,38 +1,50 @@
 defmodule Distribute do
-  def actor(fun, union_fun, partition_fun, result, id, nodes \\ 0, initial_result \\ nil) do
+  def actor(
+        fun,
+        union_fun,
+        partition_fun,
+        result,
+        id,
+        nodes \\ 0,
+        initial_result \\ nil,
+        initial_time \\ nil
+      ) do
     receive do
       {:start, value} ->
-        IO.puts("Estamos en start")
+        initial_time = DateTime.utc_now()
+        IO.puts("Starting proccess")
         initial_result = result
         initial_node = node()
         n = length(Node.list()) + 1
         partitions = partition_fun.(value, n)
-        IO.inspect(Node.list())
 
         (Node.list() ++ [node()])
         |> Enum.zip_with(partitions, fn node_name, partition ->
           Node.spawn(node_name, fn -> send(id, {:process, partition, initial_node}) end)
         end)
 
-        actor(fun, union_fun, partition_fun, result, id, n, initial_result)
+        actor(fun, union_fun, partition_fun, result, id, n, initial_result, initial_time)
 
       {:process, value, initial_node} ->
-        IO.puts("Estamos en process")
-        IO.inspect(initial_node)
+        IO.puts("Proccessing data")
         final_value = fun.(value)
         Node.spawn(initial_node, fn -> send(id, {:final, final_value}) end)
-        actor(fun, union_fun, partition_fun, result, id, nodes, initial_result)
+        actor(fun, union_fun, partition_fun, result, id, nodes, initial_result, initial_time)
 
       {:final, value} ->
         nodes = nodes - 1
-        IO.inspect("Estamos en final")
+        IO.inspect("Final step")
         v = union_fun.(result, value)
 
         if(nodes == 0) do
+          final_time = DateTime.utc_now()
+          IO.puts("Time of process in milliseconds: ")
+          IO.inspect(DateTime.diff(final_time, initial_time, :millisecond))
+          IO.puts("Final data: ")
           IO.inspect(v)
-          actor(fun, union_fun, partition_fun, initial_result, id, nodes, initial_result)
+          actor(fun, union_fun, partition_fun, initial_result, id, nodes, initial_result, nil)
         else
-          actor(fun, union_fun, partition_fun, v, id, nodes, initial_result)
+          actor(fun, union_fun, partition_fun, v, id, nodes, initial_result, initial_time)
         end
     end
   end
@@ -53,20 +65,15 @@ defmodule Files do
 end
 
 defmodule Task1 do
-  def test do
-    # file = ReadFile.read_file()
-
-    # IO.puts "\n Parallel"
-    # Benchmark.measure(fn -> count_para(file) end)
-  end
-
   @doc """
   Count the number of words in the sentence.
   Words are compared case-insensitively.
   """
   @spec count_para(String.t()) :: map
   def count_para(phrase) do
-    count_para(phrase, String.length(phrase))
+    downcase = String.downcase(phrase)
+    l = String.split(downcase, ~r/\s+/)
+    count_para(l, length(l))
   end
 
   defp count_para(list, len) when len <= 1000 do
@@ -74,7 +81,7 @@ defmodule Task1 do
   end
 
   defp count_para(l, len) do
-    {left, right} = divide_string(l, div(len, 2))
+    {left, right} = Enum.split(l, div(len, 2))
     lp = Task.async(fn -> count_para(left, div(len, 2)) end)
     rp = count_para(right, div(len, 2))
 
@@ -83,9 +90,7 @@ defmodule Task1 do
     end)
   end
 
-  defp count_list(phrase) do
-    downcase = String.downcase(phrase)
-    list = String.split(downcase, ~r/\s+/)
+  defp count_list(list) do
     count_map = %{}
     count_list(list, count_map)
   end
@@ -243,101 +248,67 @@ defmodule Task2 do
     IO.inspect(add(matrix1, matrix2))
   end
 
-  def rotate(matrix, angle) do
+  def rotate_image(matrix, angle) do
     rotation_matrix =
-      Nx.tensor([[Math.cos(angle), -Math.sin(angle)], [Math.sin(angle), Math.cos(angle)]])
-
-    # Transpose the matrix
-    transposed_matrix = Nx.transpose(rotation_matrix)
-
-    # Get the shape of the matrix sensor and find the height and width
+      Nx.transpose(
+        Nx.tensor([[Math.cos(angle), -Math.sin(angle)], [Math.sin(angle), Math.cos(angle)]],
+          type: {:f, 64}
+        )
+      )
 
     {height, width} = Nx.shape(matrix)
 
     new_image = Nx.broadcast(0, {height, width})
 
-    # Find the pivot point
+    pivot_point = Nx.tensor([(height - 1) / 2, (width - 1) / 2], type: {:f, 64})
 
-    pivot_point = {div(height, 2), div(width, 2)}
+    Enum.reduce(0..(height - 1), new_image, fn i, acc ->
+      Enum.reduce(0..(width - 1), acc, fn j, acc_inner ->
+        xy_mat = Nx.subtract(Nx.tensor([i, j], type: {:f, 64}), pivot_point)
+        rot_mat = Nx.dot(rotation_matrix, xy_mat)
 
-    # Iterate over the matrix and apply the rotation
+        new_position = Nx.add(rot_mat, pivot_point)
 
-    for i <- 0..(height - 1) do
-      for j <- 0..(width - 1) do
-        xy_mat = Nx.tensor([[i - pivot_point[0]], [j - pivot_point[1]]])
-        new_position = rotate_point(xy_mat, Nx.tensor(pivot_point), transposed_matrix)
+        new_x = Nx.to_number(new_position[1]) |> round()
+        new_y = Nx.to_number(new_position[0]) |> round()
 
-        new_y = pivot_point[0] + elem(new_position, 0)
-        new_x = pivot_point[1] + elem(new_position, 1)
-
-        if 0 <= new_x and new_x <= width - 1 and 0 <= new_y and new_y <= height - 1 do
-          Nx.indexed_put(new_image, Nx.tensor([[new_y], [new_x]]), matrix[i][j])
-          new_image
+        if 0 <= new_x and new_x < width and 0 <= new_y and new_y < height do
+          Nx.indexed_put(acc_inner, Nx.tensor([new_y, new_x]), matrix[i][j])
+        else
+          acc_inner
         end
-      end
-    end
-
-    {:ok, new_image}
-  end
-
-  def rotate_point(point, pivot, rotation_matrix) do
-    # Find the new position of the point
-    new_position = Nx.add(Nx.dot(rotation_matrix, Nx.subtract(point, pivot)), pivot)
-
-    # Round the new position
-    {round(elem(new_position, 0)), round(elem(new_position, 1))}
+      end)
+    end)
   end
 
   def distribute_image(image, n) do
-    # Get the shape of the image tensor
     {height, width} = Nx.shape(image)
+    segment_height = div(height, n)
+    IO.inspect(segment_height)
 
-    # Calculate the new height and width
-    new_height = div(height, n)
-    new_width = div(width, n)
+    Enum.map(0..(n - 1), fn i ->
+      start_row = i * segment_height
+      end_row = min(start_row + segment_height - 1, height - 1)
 
-    # Create a new image tensor
-    new_image = Nx.broadcast(0, {new_height, new_width})
+      mask = Nx.broadcast(0, {height, width})
 
-    # Iterate over the image tensor and distribute the image
-    for i <- 0..(new_height - 1) do
-      for j <- 0..(new_width - 1) do
-        new_image =
-          Nx.indexed_put(new_image, Nx.tensor([[i], [j]]), Nx.get(image, {i * n, j * n}))
-      end
-    end
+      rows = Enum.to_list(start_row..end_row)
+      cols = Enum.to_list(0..(width - 1))
 
-    {:ok, new_image}
+      indices = for r <- rows, c <- cols, do: [r, c]
+      indices_tensor = Nx.tensor(indices, type: {:s, 64})
+
+      updates = Nx.broadcast(1, {length(rows) * width})
+
+      mask = Nx.indexed_put(mask, indices_tensor, updates)
+
+      Nx.multiply(image, mask)
+    end)
   end
 
   def join_images(images) do
-    # Get the shape of the first image tensor
-    {height, width} = Nx.shape(hd(images))
-
-    # Calculate the new height and width
-    new_height = height * length(images)
-    new_width = width * length(images)
-
-    # Create a new image tensor
-    new_image = Nx.broadcast(0, {new_height, new_width})
-
-    # Iterate over the images and join them
-    for i <- 0..(length(images) - 1) do
-      for j <- 0..(length(images) - 1) do
-        new_image =
-          Nx.indexed_put(
-            new_image,
-            Nx.tensor([
-              [(i * height)..((i + 1) * height - 1)],
-              [(j * width)..((j + 1) * width - 1)]
-            ]),
-            hd(images)
-          )
-
-        images = tl(images)
-      end
-    end
-
-    {:ok, new_image}
+    Enum.reduce(images, hd(images), fn image, acc ->
+      Nx.add(acc, image)
+    end)
   end
 end
