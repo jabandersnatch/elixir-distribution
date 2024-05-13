@@ -7,3 +7,21 @@ Node.connect :"foo@Juans-MacBook-Pro-5"
 Node.connect :"foor@Juans-MacBook-Pro-5"
 
 Node.spawn(:"foo@Juans-MacBook-Pro-5", fn -> send(:some, {:start, text}) end)
+
+
+## Task 2
+
+img_path =  Grupo0.Utils.Path.get_path('Images/arrow.png')
+image = Grupo0.Utils.Imagineer.read_image(img_path)
+flat = Grupo0.Task2.Task2.flatten_pixels(image.pixels)
+matrix = Grupo0.Task2.Task2.prepare_tensor_data(flat, image.height, image.width)
+angle = Math.pi/2
+partition_fun = Grupo0.Task2.Task2.distribute_image(angle)
+init_res = Nx.broadcast(0, {360, 360, 3})
+union_fun = &Grupo0.Task2.Task2.join_images/2
+out_img_path = Grupo0.Utils.Path.get_path('Images/arrow_rotated.png')
+save_fun = Grupo0.Task2.Task2.matrix_to_image(image, out_img_path)
+pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(&Grupo0.Task2.Task2.rotate_image/1, union_fun, partition_fun, init_res, :some, save_fun) end)
+Process.register(pid, :some)
+Node.connect(:"master@solomon")
+Node.spawn(:"master@solomon", fn -> send(:some, {:start, matrix}) end)

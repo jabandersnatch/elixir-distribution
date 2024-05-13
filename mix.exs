@@ -55,6 +55,7 @@ defmodule DistributionNerves.MixProject do
       {:nerves_pack, "~> 0.7.0", targets: @all_targets},
       {:nx, "~> 0.7.2"},
       {:math, "~> 0.7.0"},
+      {:imagineer, "~> 0.3.3"},
       # Dependencies for specific targets
       # NOTE: It's generally low risk and recommended to follow minor version
       # bumps to Nerves systems. Since these include Linux kernel and Erlang

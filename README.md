@@ -12,6 +12,7 @@ This document provides instructions on how to execute the distributed Elixir cod
 
 1. **Clone the Repository**:
    Clone the code repository to your local machine or ensure your code is placed in an appropriate directory structure in your existing project.
+   Repository url: `https://github.com/jabandersnatch/distribution-nerves`
 
 2. **Install Dependencies** (if any):
    Run `mix deps.get` in the terminal at the root of your project to install any necessary dependencies specified in your `mix.exs` file.
