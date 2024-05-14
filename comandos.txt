@@ -1,12 +1,98 @@
-pid = spawn(fn -> Distribute.actor(&Task1.count_para/1, &Task1.union_fun/2, &Task1.partition_fun/2, %{}, :some) end)
+## How to start the nodes:
+### In the case of running on pc:
+
+`iex --name {name}@localhost -S mix`
+
+Where name is the name of the node you want to start. run as many nodes as you want, just change the name of the node.
+
+### In case of running on nerves (raspberry pi):
+
+Before anything youy need to got to the file `config/target.ex` and change the host name at the line 78:
+The name can be anything you want, just make sure that the name is unique. And if you are trying to connect to another raspberry pi,
+make sure to use some common name for example grupo_0, grupo_1, etc.
+
+Also if you want to connect via wifi make sure to add this configuration to the file `config/target.ex`:
+```elixir
+config :vintage_net,
+  regulatory_domain: "00",
+  additional_name_servers: [{127, 0, 0, 53}],
+  config: [
+    {"usb0", %{type: VintageNetDirect}},
+    {"eth0",
+     %{
+       type: VintageNetEthernet,
+       ipv4: %{method: :dhcp}
+     }},
+    {"wlan0", %{
+      type: VintageNetWiFi,
+      ipv4: %{method: :dhcp},
+      vintage_net_wifi: %{
+        key_mgmt: :wpa_psk,
+        psk: "{your_password}",
+        ssid: "{your_ssid}"
+      }
+    }}
+  ]
+
+  ...
+
+  config :mdns_lite,
+    
+    # Your existing configuration
+
+    dns_bridge_enabled: true,
+    dns_bridge_ip: {127, 0, 0, 53},
+    dns_bridge_port: 53,
+    dns_bridge_recursive: true,
+
+  ```
+Where your_password is the password of your wifi, and your_ssid is the name of your wifi.
+
+After that you can connec to the raspberry pi via ssh:
+
+`ssh {host_name}.local`
+
+Where host_name is the name that you set in the `config/target.ex` file.
+
+Lastly once you do that you can start the node by running the following command:
+
+Start the node:
+```elixir
+Sytem.cmd("epmd", ["-daemon"])
+
+Node.start(:"{name}@{host_name}.local")
+
+Node.set_cookie(:"{your_cookie}")
+
+```
+
+Where name is the name of the node you want to start, and your_cookie is the cookie that you set in the `config/target.ex` file.
+
+
+In your terminal, run the following command:
+`export MIX_TARGET={target}`
+Where target is the device that you have in our case `rpi4`
+
+If its your first time uploading the firmware to the raspberry pi, run the following command:
+`mix firmware.burn`
+
+If you already have the firmware in the raspberry pi, run the following command:
+`mix upload {host_name}.local`
+
+Where host_name is the name that you set in the `config/target.ex` file.
+
+## Task 1
+
+pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(&Grupo0.Task1.Task1.count_para/1, &Grupo0.Task1.Task1.union_fun/2, &Grupo0.Task1.Task1.partition_fun/2, %{}, :some) end)
 Process.register pid, :some
 
-text = ReadFile.read_file()
-Node.connect :"baz@Juans-MacBook-Pro-5"
-Node.connect :"foo@Juans-MacBook-Pro-5"
-Node.connect :"foor@Juans-MacBook-Pro-5"
+text_path = Grupo0.Utils.Path.get_path('Words/FourWordsRepeatedLarge.txt')
 
-Node.spawn(:"foo@Juans-MacBook-Pro-5", fn -> send(:some, {:start, text}) end)
+text = Grupo0.Utils.LoadWords.read_file(text_path)
+
+Node.connect :"master@solomon"
+
+Node.spawn(:"master@solomon", fn -> send(:some, {:start, text}) end)
 
 
 ## Task 2
@@ -19,9 +105,22 @@ angle = Math.pi/2
 partition_fun = Grupo0.Task2.Task2.distribute_image(angle)
 init_res = Nx.broadcast(0, {360, 360, 3})
 union_fun = &Grupo0.Task2.Task2.join_images/2
-out_img_path = Grupo0.Utils.Path.get_path('Images/arrow_rotated.png')
+out_img_path = Grupo0.Utils.Path.get_path('Images/arrow_parallel.png')
 save_fun = Grupo0.Task2.Task2.matrix_to_image(image, out_img_path)
-pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(&Grupo0.Task2.Task2.rotate_image/1, union_fun, partition_fun, init_res, :some, save_fun) end)
+fun = Grupo0.Task2.Task2.parallel_rotate_image(2)
+pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(fun, union_fun, partition_fun, init_res, :some, save_fun) end)
+Process.register(pid, :some)
+Node.connect(:"master@solomon")
+Node.spawn(:"master@solomon", fn -> send(:some, {:start, matrix}) end)
+
+
+partition_fun = nil
+init_res = Nx.broadcast(0, {360, 360, 3})
+union_fun = &Grupo0.Task2.Task2.join_images/2
+out_img_path = Grupo0.Utils.Path.get_path('Images/arrow_parallel.png')
+save_fun = nil
+fun = Grupo0.Task2.Task2.parallel_rotate_image(2)
+pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(fun, union_fun, partition_fun, init_res, :some, save_fun) end)
 Process.register(pid, :some)
 Node.connect(:"master@solomon")
 Node.spawn(:"master@solomon", fn -> send(:some, {:start, matrix}) end)

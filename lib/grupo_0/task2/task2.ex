@@ -16,7 +16,7 @@ defmodule Grupo0.Task2.Task2 do
     Nx.reshape(tensor, {height, width, 3}, names: [:y, :x, :c])
   end
 
-  def rotate_image({matrix, angle, start_row, end_row}) do
+  def rotate_image_segment({matrix, angle, start_row, end_row}) do
     rotation_matrix =
       Nx.transpose(
         Nx.tensor([[Math.cos(angle), -Math.sin(angle)], [Math.sin(angle), Math.cos(angle)]])
@@ -78,6 +78,45 @@ defmodule Grupo0.Task2.Task2 do
 
         {matrix, angle, start_row, end_row}
       end)
+    end
+  end
+
+  def parallel_rotate_image(n) do
+    fn {segment_matrix, angle, start_row, end_row} ->
+      {height, width, channels} = Nx.shape(segment_matrix)
+      sub_segment_height = div(end_row - start_row + 1, n)
+
+      tasks =
+        for i <- 0..(n - 1) do
+          sub_start_row = start_row + i * sub_segment_height
+          sub_end_row = if i == n - 1, do: end_row, else: sub_start_row + sub_segment_height - 1
+
+          mask = Nx.broadcast(0, {height, width, channels})
+
+          rows = Enum.to_list(sub_start_row..sub_end_row)
+          cols = Enum.to_list(0..(width - 1))
+          chs = Enum.to_list(0..(channels - 1))
+
+          indices = for r <- rows, c <- cols, k <- chs, do: [r, c, k]
+          indices_tensor = Nx.tensor(indices)
+          updates = Nx.broadcast(1.0, {length(rows) * width * channels})
+
+          mask = Nx.indexed_put(mask, indices_tensor, updates)
+          parallel_matrix = Nx.multiply(segment_matrix, mask)
+
+          Task.async(fn ->
+            rotate_image_segment({
+              parallel_matrix,
+              angle,
+              sub_start_row,
+              sub_end_row
+            })
+          end)
+        end
+
+      # Wait for all tasks to finish and combine the results
+      Enum.map(tasks, &Task.await(&1, :infinity))
+      |> Enum.reduce(Nx.broadcast(0, {height, width, channels}), &Nx.add(&2, &1))
     end
   end
 

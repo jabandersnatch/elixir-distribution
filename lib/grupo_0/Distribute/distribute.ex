@@ -66,7 +66,10 @@ defmodule Grupo0.Distribute.Distribute do
           IO.inspect(DateTime.diff(final_time, initial_time, :millisecond))
           IO.puts("Final data: ")
           IO.inspect(v)
-          save_fun.(v)
+
+          if save_fun != nil do
+            save_fun.(v)
+          end
 
           actor(
             fun,
