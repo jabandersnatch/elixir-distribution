@@ -83,20 +83,27 @@ Where host_name is the name that you set in the `config/target.ex` file.
 
 ## Task 1
 
-pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(&Grupo0.Task1.Task1.count_para/1, &Grupo0.Task1.Task1.union_fun/2, &Grupo0.Task1.Task1.partition_fun/2, %{}, :some) end)
-Process.register pid, :some
-
+# Main node
 text_path = Grupo0.Utils.Path.get_path('Words/FourWordsRepeatedLarge.txt')
 
 text = Grupo0.Utils.LoadWords.read_file(text_path)
 
-Node.connect :"master@solomon"
+pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(&Grupo0.Task1.Task1.count_para/1, &Grupo0.Task1.Task1.union_fun/2, &Grupo0.Task1.Task1.partition_fun/2, %{}, :some) end)
+Process.register pid, :some
+
+## When all the nodes are connected run the following command:
 
 Node.spawn(:"master@solomon", fn -> send(:some, {:start, text}) end)
 
+# Other nodes
+pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(&Grupo0.Task1.Task1.count_para/1, &Grupo0.Task1.Task1.union_fun/2, &Grupo0.Task1.Task1.partition_fun/2, %{}, :some) end)
+Process.register pid, :some
+
+Node.connect :"master@solomon"
 
 ## Task 2
 
+# Main node
 img_path =  Grupo0.Utils.Path.get_path('Images/arrow.png')
 image = Grupo0.Utils.Imagineer.read_image(img_path)
 flat = Grupo0.Task2.Task2.flatten_pixels(image.pixels)
@@ -110,10 +117,12 @@ save_fun = Grupo0.Task2.Task2.matrix_to_image(image, out_img_path)
 fun = Grupo0.Task2.Task2.parallel_rotate_image(2)
 pid = spawn(fn -> Grupo0.Distribute.Distribute.actor(fun, union_fun, partition_fun, init_res, :some, save_fun) end)
 Process.register(pid, :some)
-Node.connect(:"master@solomon")
+
+## When all the nodes are connected run the following command:
 Node.spawn(:"master@solomon", fn -> send(:some, {:start, matrix}) end)
 
 
+# Other nodes
 partition_fun = nil
 init_res = Nx.broadcast(0, {360, 360, 3})
 union_fun = &Grupo0.Task2.Task2.join_images/2
